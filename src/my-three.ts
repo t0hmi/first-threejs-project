@@ -1,4 +1,4 @@
-import { ACESFilmicToneMapping, EquirectangularReflectionMapping, PerspectiveCamera, Quaternion, Scene, Vector3, WebGLRenderer, sRGBEncoding } from "three";
+import { ACESFilmicToneMapping, ArrowHelper, Box3, BoxGeometry, Color, EquirectangularReflectionMapping, Mesh, MeshBasicMaterial, PerspectiveCamera, Quaternion, Raycaster, Scene, Vector2, Vector3, WebGLRenderer, sRGBEncoding } from "three";
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
@@ -7,11 +7,14 @@ import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
 let camera: PerspectiveCamera;
 let scene: Scene;
 let renderer: WebGLRenderer;
-let bones: any = []
-let time = 0;
-const animationSpeed = 0.01; 
+let raycaster = new Raycaster();
+let cubes: any[] = [];
 init();
 animate();
+
+
+// add event listener to made raycaster follow the mouse
+window.addEventListener('mousemove', setPickPosition);
 
 function init() {
   const container = document.querySelector("#app") as HTMLElement;
@@ -25,29 +28,23 @@ function init() {
   new RGBELoader()
     .setPath('/public/')
     .load('venice_sunset_1k.hdr', (texture) => {
-
       texture.mapping = EquirectangularReflectionMapping;
-
       scene.background = texture;
       scene.environment = texture;
-
-      const loader = new GLTFLoader().setPath('/public/');
-      loader.load('tentacule.gltf', (gltf) => {
-        const tentacule = gltf.scene;
-
-        let bone = tentacule.getObjectByName('Bone');
-        let currentBone = bone?.children;
-        
-        while(!(currentBone === undefined) && currentBone.length > 0){
-          bones.push(currentBone[0]);
-          currentBone = currentBone[0].children;
-        }
-
-        scene.add(tentacule);
-      })
-
+    
+      for (let i = 0; i < 50; i++) {
+        let px = Math.random() * 10 - 5;
+        let py = Math.random() * 10 - 5;
+        let pz = Math.random() * 10 - 5;
+        let cube = addCube(px, py, pz);
+        // made the cube move in a random direction
+        let direction = new Vector3(Math.random(), Math.random(), Math.random());
+        direction.normalize();
+        let quaternion = new Quaternion();
+        quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction);
+        cube.setRotationFromQuaternion(quaternion);
+      }
       animate();
-
 
     });
 
@@ -71,6 +68,28 @@ function init() {
 
 }
 
+function setPickPosition(event: any) {
+  const pos: Vector2 = new Vector2(0,0);
+  pos.x = (event.clientX / window.innerWidth) * 2 - 1;
+  pos.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  // cast a ray through the frustum
+  raycaster.setFromCamera(pos, camera);
+}
+
+function addCube(px: number, py: number, pz: number) {
+  var colorandom = new Color(0xffffff);
+  colorandom.setHex(Math.random() * 0xffffff);
+  var geometry = new BoxGeometry(0.1, 0.1, 0.1); //x,y,z
+  var boxMaterial = new MeshBasicMaterial({ color: colorandom });
+  var cube = new Mesh(geometry, boxMaterial);
+  cube.position.set(px, py, pz);
+  cube.geometry.computeBoundingBox(); // null sinon
+  scene.add(cube);
+  cubes.push(cube);
+  return cube;
+}
+
 function onWindowResize() {
 
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -86,16 +105,33 @@ function render() {
   renderer.render(scene, camera);
 }
 
+// gravity simulation with collision detection
 
 function animate() {
   requestAnimationFrame(animate);
-  time += animationSpeed;
+  cubes.forEach(cube => {
+    let direction = new Vector3(0, 0, 0);
+    direction.subVectors(scene.position, cube.position);
+    const cubeDirection = direction.normalize();
+    cube.position.add(cubeDirection.multiplyScalar(0.001));
+    // add colision detection between the current box and all the others
+    cubes.forEach(otherCube => {
+      if (cube != otherCube) {
+        let box1 = new Box3();
+        box1.setFromObject(cube);
+        let box2 = new Box3();
+        box2.setFromObject(otherCube);
+        if (box1.intersectsBox(box2)) {
+          let direction = new Vector3(Math.random(), Math.random(), Math.random());
+          direction.subVectors(otherCube.position, cube.position);
+          direction.normalize();
+          otherCube.position.add(direction.multiplyScalar(0.001));
+        }
+      }
+    });
 
-  bones.forEach((bone: any, index: number) => {
-    const angle = Math.sin(time + index * 0.5) * 0.3;
-    bone.quaternion.setFromAxisAngle(new Vector3(0, 1, 0), angle);
-    bone.rotation.x = (Math.sin(Date.now() * 0.002) * 0.1 * index) / 3;
   });
-
   render();
 }
+
+
