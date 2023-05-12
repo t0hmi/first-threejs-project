@@ -2,13 +2,13 @@ import { ACESFilmicToneMapping, ArrowHelper, Box3, BoxGeometry, Color, Equirecta
 
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader';
-import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
 
 let camera: PerspectiveCamera;
 let scene: Scene;
 let renderer: WebGLRenderer;
 let raycaster = new Raycaster();
-let cubes: any[] = [];
+let cube: Mesh;
+
 init();
 animate();
 
@@ -32,18 +32,10 @@ function init() {
       scene.background = texture;
       scene.environment = texture;
     
-      for (let i = 0; i < 50; i++) {
-        let px = Math.random() * 10 - 5;
-        let py = Math.random() * 10 - 5;
-        let pz = Math.random() * 10 - 5;
-        let cube = addCube(px, py, pz);
-        // made the cube move in a random direction
-        let direction = new Vector3(Math.random(), Math.random(), Math.random());
-        direction.normalize();
-        let quaternion = new Quaternion();
-        quaternion.setFromUnitVectors(new Vector3(0, 1, 0), direction);
-        cube.setRotationFromQuaternion(quaternion);
-      }
+      cube = addCube(0, 0, 0);
+
+      scene.add(cube);
+    
       animate();
 
     });
@@ -77,16 +69,15 @@ function setPickPosition(event: any) {
   raycaster.setFromCamera(pos, camera);
 }
 
-function addCube(px: number, py: number, pz: number) {
+function addCube(px: number, py: number, pz: number): Mesh {
   var colorandom = new Color(0xffffff);
   colorandom.setHex(Math.random() * 0xffffff);
-  var geometry = new BoxGeometry(0.1, 0.1, 0.1); //x,y,z
-  var boxMaterial = new MeshBasicMaterial({ color: colorandom });
+  var geometry = new BoxGeometry(0.5, 0.5, 0.5); //x,y,z
+  var boxMaterial = new MeshBasicMaterial({ color: colorandom});
   var cube = new Mesh(geometry, boxMaterial);
+  // update cube face color to match a different color that is randomly generated
   cube.position.set(px, py, pz);
   cube.geometry.computeBoundingBox(); // null sinon
-  scene.add(cube);
-  cubes.push(cube);
   return cube;
 }
 
@@ -109,28 +100,11 @@ function render() {
 
 function animate() {
   requestAnimationFrame(animate);
-  cubes.forEach(cube => {
-    let direction = new Vector3(0, 0, 0);
-    direction.subVectors(scene.position, cube.position);
-    const cubeDirection = direction.normalize();
-    cube.position.add(cubeDirection.multiplyScalar(0.001));
-    // add colision detection between the current box and all the others
-    cubes.forEach(otherCube => {
-      if (cube != otherCube) {
-        let box1 = new Box3();
-        box1.setFromObject(cube);
-        let box2 = new Box3();
-        box2.setFromObject(otherCube);
-        if (box1.intersectsBox(box2)) {
-          let direction = new Vector3(Math.random(), Math.random(), Math.random());
-          direction.subVectors(otherCube.position, cube.position);
-          direction.normalize();
-          otherCube.position.add(direction.multiplyScalar(0.001));
-        }
-      }
-    });
 
-  });
+  const quaternion = new Quaternion();
+  quaternion.setFromAxisAngle(new Vector3(0,1,0), 0.01);
+  cube.applyQuaternion(quaternion);
+
   render();
 }
 
